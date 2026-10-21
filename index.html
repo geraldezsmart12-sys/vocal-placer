@@ -414,15 +414,18 @@ repronounceBtn.onclick = async () => {
     }
     const blob = await response.blob();
     const audioUrl = URL.createObjectURL(blob);
+    const estDuration = Math.max(1.5, text.split(/\s+/).length * 0.35);
+    const targetDuration = layer.duration || estDuration;
     const newLayer = {
       id: Date.now() + Math.random(),
       type: 'audio',
       name: 'ElevenLabs: ' + text.slice(0, 25) + (text.length > 25 ? '...' : ''),
       url: audioUrl,
       start: layer.start,
-      duration: Math.max(2, text.length * 0.08),
+      duration: targetDuration,
       x: 0, y: 0, baseW: 0, baseH: 0,
-      scale: 1, speed: 1, volume: 1,
+      scale: 1, speed: targetDuration / Math.max(estDuration, 0.5),
+      volume: 1,
       track: layers.length,
       transcript: text,
       isTTS: true
@@ -430,7 +433,7 @@ repronounceBtn.onclick = async () => {
     layers.push(newLayer);
     updateUI();
     selectLayer(newLayer.id);
-    alert('New voice generated with ElevenLabs and added as a layer. You can move it on the timeline or apply it to the video.');
+    alert('New voice generated with ElevenLabs and added as a layer. Duration matched for better lip sync. You can fine-tune speed on the layer.');
   } catch (err) {
     alert('ElevenLabs error: ' + err.message + '\\nCheck your API key and voice ID.');
   } finally {
@@ -609,8 +612,27 @@ exportBtn.onclick = async () => {
   canvas.height = rect.height * 2;
   ctx.scale(2, 2);
   const stream = canvas.captureStream(30);
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const dest = audioCtx.createMediaStreamDestination();
   layers.forEach(layer => {
-    if (layer.type === 'video' && layer.el) {
+    if ((layer.type === 'video' || layer.type === 'audio') && layer.url && !layer.muted) {
+      const audioEl = document.createElement('audio');
+      audioEl.src = layer.url;
+      audioEl.crossOrigin = 'anonymous';
+      const source = audioCtx.createMediaElementSource(audioEl);
+      const gain = audioCtx.createGain();
+      gain.gain.value = layer.volume || 1;
+      source.connect(gain);
+      gain.connect(dest);
+      audioEl.currentTime = Math.max(0, currentTime - layer.start);
+      if (currentTime >= layer.start && currentTime < layer.start + layer.duration) {
+        audioEl.play().catch(()=>{});
+      }
+    }
+  });
+  dest.stream.getAudioTracks().forEach(t => stream.addTrack(t));
+  layers.forEach(layer => {
+    if (layer.type === 'video' && layer.el && !layer.muted) {
       const vid = layer.el.querySelector('video');
       if (vid && vid.captureStream) {
         try {
