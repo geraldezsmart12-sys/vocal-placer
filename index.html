@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vocal Placer</title>
+<style>
+:root { --bg: #0f1117; --panel: #1a1d27; --border: #2a2e3a; --accent: #6c5ce7; --accent2: #a29bfe; --text: #e8e9ed; --muted: #8b90a0; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+header { padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+header h1 { font-size: 1.2rem; font-weight: 700; } header h1 span { color: var(--accent2); }
+.aspect-btns { display: flex; gap: 6px; }
+.aspect-btns button { background: #2a2e3a; color: var(--text); border: 1px solid var(--border); padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; }
+.aspect-btns button.active { background: var(--accent); border-color: var(--accent); }
+.main { flex: 1; display: flex; overflow: hidden; }
+.sidebar { width: 300px; background: var(--panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 14px; overflow-y: auto; }
+.dropzone { border: 2px dashed var(--border); border-radius: 10px; padding: 20px; text-align: center; cursor: pointer; margin-bottom: 12px; background: #151821; }
+.dropzone:hover, .dropzone.dragover { border-color: var(--accent); }
+.upload-btn { background: var(--accent); color: white; border: none; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+.layer-item { background: #151821; border: 1px solid var(--border); border-radius: 8px; padding: 8px; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; font-size: 0.82rem; cursor: pointer; }
+.layer-item.selected { border-color: var(--accent); }
+.layer-item .thumb { width: 36px; height: 36px; border-radius: 4px; object-fit: cover; background: #2a2e3a; }
+.layer-item .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.layer-item button { background: transparent; border: none; color: #ff6b6b; cursor: pointer; }
+.properties { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); display: none; }
+.properties.active { display: block; }
+.properties h3 { font-size: 0.85rem; margin-bottom: 8px; color: var(--accent2); }
+.prop-row { margin-bottom: 8px; }
+.prop-row label { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--muted); margin-bottom: 3px; }
+.prop-row input[type="range"] { width: 100%; accent-color: var(--accent); }
+.transcript-area { margin-top: 6px; }
+.transcript-area textarea { width: 100%; height: 90px; background: #151821; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px; font-size: 0.8rem; resize: vertical; }
+.action-btns { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
+.action-btns button { background: #2a2e3a; color: var(--text); border: 1px solid var(--border); padding: 5px 8px; border-radius: 5px; cursor: pointer; font-size: 0.72rem; }
+.action-btns button:hover { background: var(--accent); }
+.canvas-area { flex: 1; display: flex; flex-direction: column; background: #000; }
+.preview-wrap { flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+#preview { position: relative; background: #111; border: 1px solid var(--border); overflow: hidden; }
+#preview.aspect-16-9 { width: min(90%, 900px); aspect-ratio: 16/9; }
+#preview.aspect-9-16 { height: min(90%, 720px); aspect-ratio: 9/16; }
+#preview.aspect-1-1 { width: min(80%, 560px); aspect-ratio: 1/1; }
+.media-element { position: absolute; cursor: move; user-select: none; }
+.media-element img, .media-element video { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+.media-element.selected { outline: 2px solid var(--accent); }
+.resize-handle { position: absolute; width: 10px; height: 10px; background: var(--accent); border-radius: 2px; z-index: 20; }
+.resize-handle.se { bottom: -5px; right: -5px; cursor: se-resize; }
+.resize-handle.sw { bottom: -5px; left: -5px; cursor: sw-resize; }
+.resize-handle.ne { top: -5px; right: -5px; cursor: ne-resize; }
+.resize-handle.nw { top: -5px; left: -5px; cursor: nw-resize; }
+.controls { padding: 10px 16px; background: var(--panel); border-top: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
+.play-btn { background: var(--accent); color: white; border: none; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; }
+.time { font-variant-numeric: tabular-nums; font-size: 0.85rem; color: var(--muted); }
+.timeline-wrap { height: 120px; background: #12141c; border-top: 1px solid var(--border); padding: 10px 16px; overflow-x: auto; }
+.timeline { position: relative; height: 100%; min-width: 100%; }
+.track { height: 28px; margin-bottom: 4px; background: #1a1d27; border-radius: 4px; position: relative; border: 1px solid var(--border); }
+.clip { position: absolute; height: 100%; background: linear-gradient(135deg, var(--accent), #5a4bd1); border-radius: 4px; cursor: ew-resize; display: flex; align-items: center; padding: 0 6px; font-size: 0.7rem; color: white; overflow: hidden; }
+.clip.audio { background: linear-gradient(135deg, #00b894, #00cec9); }
+.playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: #ff6b6b; z-index: 10; pointer-events: none; }
+.hint { color: var(--muted); font-size: 0.72rem; padding: 4px 0; }
+.empty-state { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--muted); pointer-events: none; }
+</style>
+</head>
+<body>
+<header>
+  <div><h1>Vocal<span>Placer</span></h1></div>
+  <div class="aspect-btns">
+    <button data-aspect="16-9" class="active">16:9</button>
+    <button data-aspect="9-16">9:16</button>
+    <button data-aspect="1-1">1:1</button>
+  </div>
+  <button class="upload-btn" id="uploadBtn">+ Upload</button>
+  <button class="upload-btn" id="exportBtn" style="background:#00b894;">⬇ Download</button>
+</header>
+<div class="main">
+  <aside class="sidebar">
+    <div class="dropzone" id="dropzone"><div style="font-size:1.6rem;">📁</div><p style="color:var(--muted);font-size:0.8rem;margin-top:4px;">Drop files or click Upload</p></div>
+    <div id="layersList"></div>
+    <div class="properties" id="properties">
+      <h3>Adjust Selected</h3>
+      <div class="prop-row" id="sizeRow"><label>Size <span id="sizeVal">100%</span></label><input type="range" id="sizeSlider" min="20" max="400" value="100"></div>
+      <div class="prop-row" id="speedRow"><label>Speed <span id="speedVal">1.0x</span></label><input type="range" id="speedSlider" min="0.25" max="3" step="0.05" value="1"></div>
+      <div class="prop-row" id="volumeRow"><label>Volume <span id="volumeVal">100%</span></label><input type="range" id="volumeSlider" min="0" max="100" value="100"></div>
+      <div class="transcript-area" id="transcriptArea" style="display:none;">
+        <label style="font-size:0.75rem;color:var(--muted);">Captions / Spoken text</label>
+        <textarea id="transcriptText" placeholder="Text will appear here when available. You can edit or delete lines."></textarea>
+        <div class="action-btns">
+          <button id="extractAudioBtn">Separate Vocal</button>
+          <button id="transcribeBtn">Get Text</button>
+          <button id="repronounceBtn">Re-pronounce</button>
+          <button id="cropBtn">Crop Mode</button>
+        </div>
+      </div>
+    </div>
+    <p class="hint">Auto-fills to match media ratio. Drag corners to resize. Separate vocal to get editable captions.</p>
+  </aside>
+  <div class="canvas-area">
+    <div class="preview-wrap">
+      <div id="preview" class="aspect-16-9"><div class="empty-state" id="emptyState">Drop media to start</div></div>
+    </div>
+    <div class="controls">
+      <button class="play-btn" id="playBtn">▶</button>
+      <span class="time" id="timeDisplay">0:00.00 / 0:01.00</span>
+    </div>
+    <div class="timeline-wrap"><div class="timeline" id="timeline"><div class="playhead" id="playhead"></div></div></div>
+  </div>
+</div>
+<input type="file" id="fileInput" multiple accept="video/*,image/*,audio/*" style="display:none">
+<script>
+const fileInput = document.getElementById('fileInput');
+const dropzone = document.getElementById('dropzone');
+const uploadBtn = document.getElementById('uploadBtn');
+const preview = document.getElementById('preview');
+const layersList = document.getElementById('layersList');
+const timeline = document.getElementById('timeline');
+const playhead = document.getElementById('playhead');
+const playBtn = document.getElementById('playBtn');
+const timeDisplay = document.getElementById('timeDisplay');
+const emptyState = document.getElementById('emptyState');
+const properties = document.getElementById('properties');
+const sizeSlider = document.getElementById('sizeSlider');
+const speedSlider = document.getElementById('speedSlider');
+const volumeSlider = document.getElementById('volumeSlider');
+const sizeVal = document.getElementById('sizeVal');
+const speedVal = document.getElementById('speedVal');
+const volumeVal = document.getElementById('volumeVal');
+const transcriptArea = document.getElementById('transcriptArea');
+const transcriptText = document.getElementById('transcriptText');
+const extractAudioBtn = document.getElementById('extractAudioBtn');
+const transcribeBtn = document.getElementById('transcribeBtn');
+const repronounceBtn = document.getElementById('repronounceBtn');
+const cropBtn = document.getElementById('cropBtn');
+let layers = [];
+let selectedId = null;
+let isPlaying = false;
+let currentTime = 0;
+let totalDuration = 1;
+let animationFrame = null;
+let currentAspect = '16-9';
+let cropMode = false;
+document.querySelectorAll('.aspect-btns button').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('.aspect-btns button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentAspect = btn.dataset.aspect;
+    preview.className = 'aspect-' + currentAspect;
+  };
+});
+uploadBtn.onclick = () => fileInput.click();
+dropzone.onclick = () => fileInput.click();
+fileInput.onchange = (e) => handleFiles(e.target.files);
+dropzone.ondragover = (e) => { e.preventDefault(); dropzone.classList.add('dragover'); };
+dropzone.ondragleave = () => dropzone.classList.remove('dragover');
+dropzone.ondrop = (e) => { e.preventDefault(); dropzone.classList.remove('dragover'); handleFiles(e.dataTransfer.files); };
+function detectAspect(w, h) {
+  const r = w / h;
+  if (Math.abs(r - 1) < 0.15) return '1-1';
+  if (r < 0.8) return '9-16';
+  return '16-9';
+}
+function setAspect(aspect) {
+  currentAspect = aspect;
+  preview.className = 'aspect-' + aspect;
+  document.querySelectorAll('.aspect-btns button').forEach(b => {
+    b.classList.toggle('active', b.dataset.aspect === aspect);
+  });
+}
+function handleFiles(files) {
+  for (const file of files) {
+    const url = URL.createObjectURL(file);
+    const type = file.type.startsWith('video') ? 'video' : file.type.startsWith('audio') ? 'audio' : file.type.startsWith('image') ? 'image' : 'other';
+    if (type === 'other') continue;
+    const id = Date.now() + Math.random();
+    const layer = {
+      id, type, name: file.name, url,
+      start: 0, duration: 5,
+      x: 0, y: 0, baseW: 300, baseH: 300, scale: 1,
+      speed: 1, volume: 1, track: layers.length, transcript: ''
+    };
+    const media = document.createElement(type === 'image' ? 'img' : type);
+    media.src = url;
+    media.onloadedmetadata = media.onload = () => {
+      const w = media.videoWidth || media.naturalWidth || 300;
+      const h = media.videoHeight || media.naturalHeight || 300;
+      layer.baseW = w;
+      layer.baseH = h;
+      layer.duration = Math.min(media.duration || 5, 60);
+      if (layers.length === 1 && type !== 'audio') {
+        setAspect(detectAspect(w, h));
+      }
+      const pw = preview.clientWidth || 400;
+      const ph = preview.clientHeight || 400;
+      const scale = Math.min(pw / w, ph / h) * 0.9;
+      layer.scale = scale;
+      layer.x = (pw - w * scale) / 2;
+      layer.y = (ph - h * scale) / 2;
+      applyTransform(layer);
+      updateTotalDuration();
+      renderTimeline();
+    };
+    layers.push(layer);
+    if (type !== 'audio') createPreviewElement(layer);
+  }
+  updateUI();
+  emptyState.style.display = layers.length ? 'none' : 'flex';
+}
+function createPreviewElement(layer) {
+  const div = document.createElement('div');
+  div.className = 'media-element';
+  div.dataset.id = layer.id;
+  applyTransform(layer, div);
+  if (layer.type === 'image') {
+    const img = document.createElement('img');
+    img.src = layer.url;
+    div.appendChild(img);
+  } else if (layer.type === 'video') {
+    const vid = document.createElement('video');
+    vid.src = layer.url;
+    vid.muted = false;
+    vid.loop = true;
+    vid.playbackRate = layer.speed;
+    vid.volume = layer.volume;
+    div.appendChild(vid);
+  }
+  ['nw','ne','sw','se'].forEach(pos => {
+    const h = document.createElement('div');
+    h.className = 'resize-handle ' + pos;
+    h.onmousedown = (e) => startResize(e, layer, pos);
+    div.appendChild(h);
+  });
+  let dragging = false, offsetX, offsetY;
+  div.onmousedown = (e) => {
+    if (e.target.classList.contains('resize-handle')) return;
+    dragging = true;
+    selectLayer(layer.id);
+    offsetX = e.clientX - div.offsetLeft;
+    offsetY = e.clientY - div.offsetTop;
+    e.stopPropagation();
+  };
+  document.addEventListener('mousemove', (e) => {
+    if (!dragging || selectedId !== layer.id) return;
+    layer.x = e.clientX - offsetX;
+    layer.y = e.clientY - offsetY;
+    div.style.left = layer.x + 'px';
+    div.style.top = layer.y + 'px';
+  });
+  document.addEventListener('mouseup', () => dragging = false);
+  preview.appendChild(div);
+  layer.el = div;
+}
+function startResize(e, layer, pos) {
+  e.stopPropagation();
+  const startX = e.clientX, startY = e.clientY;
+  const startW = layer.baseW * layer.scale, startH = layer.baseH * layer.scale;
+  const startLeft = layer.x, startTop = layer.y;
+  const move = (ev) => {
+    const dx = ev.clientX - startX, dy = ev.clientY - startY;
+    let newW = startW, newH = startH, newX = startLeft, newY = startTop;
+    if (pos.includes('e')) newW = startW + dx;
+    if (pos.includes('w')) { newW = startW - dx; newX = startLeft + dx; }
+    if (pos.includes('s')) newH = startH + dy;
+    if (pos.includes('n')) { newH = startH - dy; newY = startTop + dy; }
+    if (newW < 40 || newH < 40) return;
+    layer.scale = newW / layer.baseW;
+    layer.x = newX;
+    layer.y = newY;
+    applyTransform(layer);
+  };
+  const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); };
+  document.addEventListener('mousemove', move);
+  document.addEventListener('mouseup', up);
+}
+function applyTransform(layer, div = layer.el) {
+  if (!div) return;
+  div.style.left = layer.x + 'px';
+  div.style.top = layer.y + 'px';
+  div.style.width = (layer.baseW * layer.scale) + 'px';
+  div.style.height = (layer.baseH * layer.scale) + 'px';
+  div.style.zIndex = 100 - layer.track;
+}
+function selectLayer(id) {
+  selectedId = id;
+  updateSelection();
+  updateProperties();
+  updateUI();
+}
+function updateProperties() {
+  const layer = layers.find(l => l.id === selectedId);
+  if (!layer) { properties.classList.remove('active'); return; }
+  properties.classList.add('active');
+  document.getElementById('sizeRow').style.display = layer.type === 'audio' ? 'none' : 'block';
+  document.getElementById('speedRow').style.display = (layer.type === 'video' || layer.type === 'audio') ? 'block' : 'none';
+  document.getElementById('volumeRow').style.display = (layer.type === 'video' || layer.type === 'audio') ? 'block' : 'none';
+  transcriptArea.style.display = (layer.type === 'video' || layer.type === 'audio') ? 'block' : 'none';
+  sizeSlider.value = Math.round(layer.scale * 100);
+  speedSlider.value = layer.speed;
+  volumeSlider.value = Math.round(layer.volume * 100);
+  transcriptText.value = layer.transcript || '';
+  sizeVal.textContent = sizeSlider.value + '%';
+  speedVal.textContent = parseFloat(layer.speed).toFixed(2) + 'x';
+  volumeVal.textContent = volumeSlider.value + '%';
+}
+sizeSlider.oninput = () => {
+  const layer = layers.find(l => l.id === selectedId);
+  if (!layer) return;
+  layer.scale = sizeSlider.value / 100;
+  sizeVal.textContent = sizeSlider.value + '%';
+  applyTransform(layer);
+};
+speedSlider.oninput = () => {
+  const layer = layers.find(l => l.id === selectedId);
+  if (!layer) return;
+  layer.speed = parseFloat(speedSlider.value);
+  speedVal.textContent = layer.speed.toFixed(2) + 'x';
+  const media = layer.el?.querySelector('video');
+  if (media) media.playbackRate = layer.speed;
+};
+volumeSlider.oninput = () => {
+  const layer = layers.find(l => l.id === selectedId);
+  if (!layer) return;
+  layer.volume = volumeSlider.value / 100;
+  volumeVal.textContent = volumeSlider.value + '%';
+  const media = layer.el?.querySelector('video');
+  if (media) media.volume = layer.volume;
+};
+transcriptText.oninput = () => {
+  const layer = layers.find(l => l.id === selectedId);
+  if (layer) layer.transcript = transcriptText.value;
+};
+extractAudioBtn.onclick = async () => {
+  const layer = layers.find(l => l.id === selectedId);
+  if (!layer || layer.type !== 'video') return alert('Select a video first');
+  try {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const response = await fetch(layer.url);
+    const arrayBuffer = await response.arrayBuffer();
+    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+    const offline = new OfflineAudioContext(audioBuffer.numberOfChannels, audioBuffer.length, audioBuffer.sampleRate);
+    const source = offline.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(offline.destination);
+    source.start();
+    const rendered = await offline.startRendering();
+    const wav = audioBufferToWav(rendered);
+    const blob = new Blob([wav], { type: 'audio/wav' });
+    const audioUrl = URL.createObjectURL(blob);
+    const audioLayer = {
+      id: Date.now() + Math.random(), type: 'audio',
+      name: layer.name.replace(/\.[^.]+$/, '') + ' (vocal).wav',
+      url: audioUrl, start: layer.start, duration: layer.duration,
+      x: 0, y: 0, baseW: 0, baseH: 0, scale: 1, speed: 1, volume: 1,
+      track: layers.length, transcript: layer.transcript || '(Transcript will appear after "Get Text")'
+    };
+    layers.push(audioLayer);
+    updateUI();
+    selectLayer(audioLayer.id);
+    alert('Vocal separated. Click "Get Text" to fill captions (browser support varies).');
+  } catch (err) {
+    alert('Could not extract audio: ' + err.message);
+  }
+};
+transcribeBtn.onclick = () => {
+  const layer = layers.find(l => l.id === selectedId);
+  if (!layer) return;
+  if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+    alert('Auto transcription needs Chrome/Edge. You can type or paste the text.');
+    return;
+  }
+  const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const recognition = new Recognition();
+  recognition.lang = 'en-US';
+  recognition.interimResults = false;
+  recognition.onresult = (e) => {
+    const text = e.results[0][0].transcript;
+    transcriptText.value = text;
+    layer.transcript = text;
+  };
+  recognition.onerror = () => alert('Could not transcribe. Type the text manually.');
+  recognition.start();
+  alert('Play the audio/video or speak — listening now...');
+};
+repronounceBtn.onclick = async () => {
+  const layer = layers.find(l => l.id === selectedId);
+  if (!layer) return;
+  const text = transcriptText.value.trim();
+  if (!text) return alert('Add some text first');
+  if (!window.speechSynthesis) return alert('Text-to-speech not supported');
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.rate = layer.speed || 1;
+  utterance.volume = 1;
+  const voices = speechSynthesis.getVoices();
+  const preferred = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Google') || v.name.includes('Natural'))) || voices.find(v => v.lang.startsWith('en')) || voices[0];
+  if (preferred) utterance.voice = preferred;
+  speechSynthesis.cancel();
+  const newLayer = {
+    id: Date.now() + Math.random(),
+    type: 'audio',
+    name: 'Re-pronounce: ' + text.slice(0, 30) + (text.length > 30 ? '...' : ''),
+    url: '',
+    start: layer.start,
+    duration: Math.max(2, text.length * 0.08),
+    x: 0, y: 0, baseW: 0, baseH: 0,
+    scale: 1, speed: layer.speed || 1, volume: layer.volume || 1,
+    track: layers.length,
+    transcript: text,
+    isTTS: true
+  };
+  try {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const dest = audioCtx.createMediaStreamDestination();
+    const recorder = new MediaRecorder(dest.stream);
+    const chunks = [];
+    recorder.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+    recorder.onstop = () => {
+      const blob = new Blob(chunks, { type: 'audio/webm' });
+      newLayer.url = URL.createObjectURL(blob);
+      layers.push(newLayer);
+      updateUI();
+      selectLayer(newLayer.id);
+      alert('Re-pronounced audio added as a new layer on the timeline. You can move and export it.');
+    };
+    recorder.start();
+    speechSynthesis.speak(utterance);
+    utterance.onend = () => {
+      setTimeout(() => recorder.stop(), 300);
+    };
+  } catch (err) {
+    speechSynthesis.speak(utterance);
+    layers.push(newLayer);
+    updateUI();
+    selectLayer(newLayer.id);
+    alert('Spoke the text. A new layer was added (browser capture limited). For perfect voice matching you need a voice-cloning service.');
+  }
+};
+cropBtn.onclick = () => {
+  cropMode = !cropMode;
+  cropBtn.textContent = cropMode ? 'Exit Crop' : 'Crop Mode';
+  alert(cropMode ? 'Crop mode: drag the element edges. (Full crop UI coming next)' : 'Crop mode off');
+};
+function updateUI() {
+  layersList.innerHTML = '';
+  [...layers].reverse().forEach(layer => {
+    const item = document.createElement('div');
+    item.className = 'layer-item' + (layer.id === selectedId ? ' selected' : '');
+    item.innerHTML = `${layer.type !== 'audio' ? `<img class="thumb" src="${layer.url}">` : '<div class="thumb" style="display:flex;align-items:center;justify-content:center;">🎵</div>'}<span class="name">${layer.name}</span><button>✕</button>`;
+    item.onclick = (e) => { if (e.target.tagName !== 'BUTTON') selectLayer(layer.id); };
+    item.querySelector('button').onclick = (e) => { e.stopPropagation(); removeLayer(layer.id); };
+    layersList.appendChild(item);
+  });
+  renderTimeline();
+  updateTotalDuration();
+}
+function removeLayer(id) {
+  const layer = layers.find(l => l.id === id);
+  if (layer?.el) layer.el.remove();
+  if (layer?.url) URL.revokeObjectURL(layer.url);
+  layers = layers.filter(l => l.id !== id);
+  if (selectedId === id) { selectedId = null; properties.classList.remove('active'); }
+  updateUI();
+  emptyState.style.display = layers.length ? 'none' : 'flex';
+}
+function updateTotalDuration() {
+  totalDuration = Math.max(1, ...layers.map(l => l.start + l.duration));
+  timeDisplay.textContent = `${formatTime(currentTime)} / ${formatTime(totalDuration)}`;
+}
+function formatTime(sec) {
+  const m = Math.floor(sec / 60);
+  const s = (sec % 60).toFixed(2).padStart(5, '0');
+  return `${m}:${s}`;
+}
+function renderTimeline() {
+  [...timeline.querySelectorAll('.track')].forEach(t => t.remove());
+  const pxPerSec = 80;
+  timeline.style.width = Math.max(100, totalDuration * pxPerSec) + 'px';
+  layers.forEach(layer => {
+    const track = document.createElement('div');
+    track.className = 'track';
+    const clip = document.createElement('div');
+    clip.className = 'clip' + (layer.type === 'audio' ? ' audio' : '');
+    clip.style.left = (layer.start * pxPerSec) + 'px';
+    clip.style.width = Math.max(40, layer.duration * pxPerSec) + 'px';
+    clip.textContent = layer.name;
+    let dragStartX, origStart;
+    clip.onmousedown = (e) => {
+      e.stopPropagation();
+      dragStartX = e.clientX; origStart = layer.start;
+      const move = (ev) => {
+        const dx = (ev.clientX - dragStartX) / pxPerSec;
+        layer.start = Math.max(0, origStart + dx);
+        clip.style.left = (layer.start * pxPerSec) + 'px';
+        updateTotalDuration();
+      };
+      const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); };
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', up);
+    };
+    track.appendChild(clip);
+    timeline.appendChild(track);
+  });
+  updatePlayhead();
+}
+function updatePlayhead() { playhead.style.left = (currentTime * 80) + 'px'; }
+function updateSelection() {
+  document.querySelectorAll('.media-element').forEach(el => el.classList.remove('selected'));
+  if (selectedId) {
+    const el = document.querySelector(`.media-element[data-id="${selectedId}"]`);
+    if (el) el.classList.add('selected');
+  }
+}
+playBtn.onclick = () => {
+  isPlaying = !isPlaying;
+  playBtn.textContent = isPlaying ? '⏸' : '▶';
+  if (isPlaying) {
+    const start = performance.now() - currentTime * 1000;
+    const tick = (now) => {
+      if (!isPlaying) return;
+      currentTime = (now - start) / 1000;
+      if (currentTime >= totalDuration) { currentTime = 0; isPlaying = false; playBtn.textContent = '▶'; }
+      updatePlayhead();
+      timeDisplay.textContent = `${formatTime(currentTime)} / ${formatTime(totalDuration)}`;
+      layers.forEach(layer => {
+        if (layer.type === 'video' && layer.el) {
+          const vid = layer.el.querySelector('video');
+          if (vid) {
+            const localTime = (currentTime - layer.start) * layer.speed;
+            if (currentTime >= layer.start && currentTime < layer.start + layer.duration) {
+              if (Math.abs(vid.currentTime - localTime) > 0.3) vid.currentTime = localTime;
+              vid.playbackRate = layer.speed;
+              vid.volume = layer.volume;
+              vid.play().catch(()=>{});
+            } else vid.pause();
+          }
+        }
+      });
+      animationFrame = requestAnimationFrame(tick);
+    };
+    animationFrame = requestAnimationFrame(tick);
+  } else {
+    cancelAnimationFrame(animationFrame);
+    layers.forEach(layer => { if (layer.type === 'video' && layer.el) layer.el.querySelector('video')?.pause(); });
+  }
+};
+timeline.onclick = (e) => {
+  const rect = timeline.getBoundingClientRect();
+  currentTime = Math.max(0, (e.clientX - rect.left) / 80);
+  updatePlayhead();
+  timeDisplay.textContent = `${formatTime(currentTime)} / ${formatTime(totalDuration)}`;
+};
+function audioBufferToWav(buffer) {
+  const numChannels = buffer.numberOfChannels;
+  const sampleRate = buffer.sampleRate;
+  const bitDepth = 16;
+  const bytesPerSample = bitDepth / 8;
+  const blockAlign = numChannels * bytesPerSample;
+  const dataLength = buffer.length * blockAlign;
+  const arrayBuffer = new ArrayBuffer(44 + dataLength);
+  const view = new DataView(arrayBuffer);
+  const writeString = (offset, string) => { for (let i = 0; i < string.length; i++) view.setUint8(offset + i, string.charCodeAt(i)); };
+  writeString(0, 'RIFF');
+  view.setUint32(4, 36 + dataLength, true);
+  writeString(8, 'WAVE');
+  writeString(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * blockAlign, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitDepth, true);
+  writeString(36, 'data');
+  view.setUint32(40, dataLength, true);
+  let offset = 44;
+  for (let i = 0; i < buffer.length; i++) {
+    for (let ch = 0; ch < numChannels; ch++) {
+      const sample = Math.max(-1, Math.min(1, buffer.getChannelData(ch)[i]));
+      view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+      offset += 2;
+    }
+  }
+  return arrayBuffer;
+}
+const exportBtn = document.getElementById('exportBtn');
+exportBtn.onclick = async () => {
+  if (!layers.length) return alert('Add some media first');
+  exportBtn.disabled = true;
+  exportBtn.textContent = 'Recording...';
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  const rect = preview.getBoundingClientRect();
+  canvas.width = rect.width * 2;
+  canvas.height = rect.height * 2;
+  ctx.scale(2, 2);
+  const stream = canvas.captureStream(30);
+  layers.forEach(layer => {
+    if (layer.type === 'video' && layer.el) {
+      const vid = layer.el.querySelector('video');
+      if (vid && vid.captureStream) {
+        try {
+          const audioTracks = vid.captureStream().getAudioTracks();
+          audioTracks.forEach(t => stream.addTrack(t));
+        } catch(e) {}
+      }
+    }
+  });
+  const recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
+  const chunks = [];
+  recorder.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+  recorder.onstop = () => {
+    const blob = new Blob(chunks, { type: 'video/webm' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'vocal-placer-export.webm';
+    a.click();
+    URL.revokeObjectURL(url);
+    exportBtn.disabled = false;
+    exportBtn.textContent = '⬇ Download';
+    alert('Download started! (WebM format)');
+  };
+  recorder.start();
+  const wasPlaying = isPlaying;
+  if (!isPlaying) playBtn.click();
+  const draw = () => {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#111';
+    ctx.fillRect(0, 0, rect.width, rect.height);
+    [...layers].reverse().forEach(layer => {
+      if (layer.type === 'audio' || !layer.el) return;
+      const media = layer.el.querySelector('video, img');
+      if (!media) return;
+      const local = currentTime - layer.start;
+      if (local < 0 || local > layer.duration) return;
+      const w = layer.baseW * layer.scale;
+      const h = layer.baseH * layer.scale;
+      try { ctx.drawImage(media, layer.x, layer.y, w, h); } catch(e) {}
+    });
+  };
+  const interval = setInterval(draw, 1000/30);
+  setTimeout(() => {
+    clearInterval(interval);
+    recorder.stop();
+    if (!wasPlaying && isPlaying) playBtn.click();
+  }, totalDuration * 1000 + 200);
+};
+</script>
+</body>
+</html>
