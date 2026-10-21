@@ -85,7 +85,7 @@ header h1 { font-size: 1.2rem; font-weight: 700; } header h1 span { color: var(-
         <label style="font-size:0.75rem;color:var(--muted);">ElevenLabs API Key</label>
         <input type="password" id="apiKeyInput" placeholder="sk_..." style="width:100%;padding:6px;margin-bottom:6px;background:#151821;color:var(--text);border:1px solid var(--border);border-radius:6px;" value="sk_d7a17183ef37fef327b4d7fe054e0ba551e4978f3d158880">
         <label style="font-size:0.75rem;color:var(--muted);">Voice ID (optional, leave blank for default)</label>
-        <input type="text" id="voiceIdInput" placeholder="Voice ID from ElevenLabs" style="width:100%;padding:6px;margin-bottom:6px;background:#151821;color:var(--text);border:1px solid var(--border);border-radius:6px;">
+        <input type="text" id="voiceIdInput" value="26JHmJ57KjZ8ywfA1lkM" placeholder="Voice ID from ElevenLabs" style="width:100%;padding:6px;margin-bottom:6px;background:#151821;color:var(--text);border:1px solid var(--border);border-radius:6px;">
         <label style="font-size:0.75rem;color:var(--muted);">Captions / Spoken text</label>
         <textarea id="transcriptText" placeholder="Text will appear here when available. You can edit or delete lines."></textarea>
         <div class="action-btns">
@@ -394,7 +394,7 @@ repronounceBtn.onclick = async () => {
   repronounceBtn.disabled = true;
   repronounceBtn.textContent = 'Generating...';
   try {
-    const voiceId = document.getElementById('voiceIdInput').value.trim() || '21m00Tcm4TlvDq8ikWAM';
+    const voiceId = document.getElementById('voiceIdInput').value.trim() || '26JHmJ57KjZ8ywfA1lkM';
     const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
       method: 'POST',
       headers: {
